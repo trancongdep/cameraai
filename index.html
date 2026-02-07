@@ -3,86 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VDC Safety AI v1.6</title>
+    <title>VDC Safety AI v1.13</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #0f172a; color: white; overflow-x: hidden; }
-        .app-bar { background: #1e40af; padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        #camera-wrapper { position: relative; width: 90vw; height: 90vw; max-width: 350px; max-height: 350px; margin: 20px auto; border: 3px solid #334155; border-radius: 20px; overflow: hidden; background: #000; }
-        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        .log-panel { background: #1e293b; margin: 15px; padding: 15px; border-radius: 15px; border-left: 8px solid #3b82f6; text-align: left; font-size: 0.9rem; }
-        .status-tag { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; margin-top: 5px; }
-        .loading { background: #854d0e; color: #fefce8; }
-        .ready { background: #166534; color: #dcfce7; }
-        .violation { color: #ef4444; font-weight: bold; border: 1px solid #ef4444; padding: 2px 5px; border-radius: 4px; }
+        body { font-family: sans-serif; margin: 0; background: #0f172a; color: white; text-align: center; }
+        .app-bar { background: #1e40af; padding: 15px; font-weight: bold; }
+        #cam-box { width: 100%; max-width: 400px; margin: 20px auto; position: relative; background: #000; border-radius: 15px; overflow: hidden; }
+        video, canvas { width: 100%; display: block; }
+        .error-log { color: #f87171; background: #450a0a; margin: 10px; padding: 10px; border-radius: 8px; font-size: 12px; display: none; }
     </style>
 </head>
 <body>
 
-<div class="app-bar">VDC SAFETY AI - PHIÊN BẢN 1.6</div>
+<div class="app-bar">VDC SAFETY AI - V1.13</div>
 
-<div id="camera-wrapper">
+<div id="cam-box">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
 </div>
 
-<div class="log-panel">
-    <div><b>Trình trạng:</b> <span id="status" class="status-tag loading">Đang nạp mô hình PPE...</span></div>
-    <div style="margin-top: 10px;"><b>Kết quả quét:</b> <span id="detection-text">Đang phân tích hiện trường...</span></div>
+<div id="error-box" class="error-log"></div>
+
+<div id="status" style="margin-top: 15px; font-size: 14px;">
+    Đang kiểm tra tệp tin ppe.onnx...
 </div>
 
 <script>
-    // Firebase Config của bạn
-    const firebaseConfig = { 
-        apiKey: "AIzaSyCzWjfcD5Dgq7V-i2izb9tKLR6QM6qWPQo", 
-        authDomain: "tavietnam-78ae8.firebaseapp.com", 
-        projectId: "tavietnam-78ae8", 
-        storageBucket: "tavietnam-78ae8.firebasestorage.app", 
-        messagingSenderId: "670121705534", 
-        appId: "1:670121705534:web:1027ad98550573ad37116f" 
-    };
-    firebase.initializeApp(firebaseConfig);
+    async function init() {
+        const status = document.getElementById('status');
+        const errorBox = document.getElementById('error-box');
 
-    // Danh sách nhãn thực tế từ file ppe.pt của bạn
-    const labels = ["Đã đội nón", "Khẩu trang", "CHƯA ĐỘI NÓN", "Không khẩu trang", "Không áo phản quang", "Nhân viên", "Cọc tiêu", "Áo phản quang", "Máy móc", "Phương tiện"];
-
-    const video = document.getElementById('webcam');
-    const canvas = document.getElementById('overlay');
-    const ctx = canvas.getContext('2d');
-    const statusEl = document.getElementById('status');
-    const resultEl = document.getElementById('detection-text');
-
-    async function startAI() {
         try {
-            // Nạp mô hình ppe.onnx (đảm bảo file nằm cùng thư mục trên GitHub)
-            const session = await ort.InferenceSession.create('./ppe.onnx', { executionProviders: ['wasm'] });
+            // Kiểm tra dung lượng file trước khi nạp
+            const response = await fetch('./ppe.onnx', { method: 'HEAD' });
+            const size = response.headers.get('content-length');
             
-            statusEl.innerText = "HỆ THỐNG SẴN SÀNG";
-            statusEl.className = "status-tag ready";
+            if (size < 1000) {
+                throw new Error("File quá nhỏ (" + size + " bytes). Có thể GitHub LFS chưa đẩy file thật lên.");
+            }
 
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" } 
+            status.innerText = "Đang nạp mô hình AI (" + (size / (1024*1024)).toFixed(1) + " MB)...";
+            
+            // Nạp mô hình
+            const session = await ort.InferenceSession.create('./ppe.onnx', { 
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all'
             });
-            video.srcObject = stream;
+            
+            status.innerText = "● HỆ THỐNG SẴN SÀNG";
+            status.style.color = "#4ade80";
 
-            // Bắt đầu vòng lặp xử lý
-            tick(session);
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            document.getElementById('webcam').srcObject = stream;
+
         } catch (e) {
-            statusEl.innerText = "Lỗi: " + e.message;
-            statusEl.style.background = "#991b1b";
-            console.error(e);
+            status.innerText = "Lỗi hệ thống (V1.13)";
+            errorBox.style.display = "block";
+            errorBox.innerText = e.message + "\n\nGợi ý: Hãy kiểm tra xem file ppe.onnx trên GitHub có đúng 87MB không.";
         }
     }
-
-    function tick(session) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Logic vẽ khung hình AI sẽ lặp lại ở đây
-        requestAnimationFrame(() => tick(session));
-    }
-
-    startAI();
+    init();
 </script>
 </body>
 </html>

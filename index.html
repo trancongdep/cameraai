@@ -2,67 +2,62 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VDC Safety AI v1.13</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VDC Safety AI v1.15</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 0; background: #0f172a; color: white; text-align: center; }
-        .app-bar { background: #1e40af; padding: 15px; font-weight: bold; }
-        #cam-box { width: 100%; max-width: 400px; margin: 20px auto; position: relative; background: #000; border-radius: 15px; overflow: hidden; }
-        video, canvas { width: 100%; display: block; }
-        .error-log { color: #f87171; background: #450a0a; margin: 10px; padding: 10px; border-radius: 8px; font-size: 12px; display: none; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #020617; color: white; display: flex; flex-direction: column; height: 100vh; }
+        .header { background: #1d4ed8; padding: 15px; text-align: center; font-weight: bold; border-bottom: 3px solid #3b82f6; }
+        #view-container { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
+        .status-footer { background: #1e293b; padding: 20px; text-align: left; border-top: 1px solid #334155; }
+        #log { font-size: 12px; color: #94a3b8; margin-top: 5px; height: 40px; overflow: hidden; }
+        .loading-dot { animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; } }
     </style>
 </head>
 <body>
 
-<div class="app-bar">VDC SAFETY AI - V1.13</div>
+<div class="header">VDC SAFETY AI - PHIÊN BẢN 1.15</div>
 
-<div id="cam-box">
+<div id="view-container">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
 </div>
 
-<div id="error-box" class="error-log"></div>
-
-<div id="status" style="margin-top: 15px; font-size: 14px;">
-    Đang kiểm tra tệp tin ppe.onnx...
+<div class="status-footer">
+    <div style="font-weight: bold;">Trạng thái: <span id="stt-text" style="color: #fbbf24;">Đang tải mô hình...</span></div>
+    <div id="log">Đang nạp file ppe.dat từ GitHub (83.3 MB) <span class="loading-dot">...</span></div>
 </div>
 
 <script>
-    async function init() {
-        const status = document.getElementById('status');
-        const errorBox = document.getElementById('error-box');
+    const sttText = document.getElementById('stt-text');
+    const log = document.getElementById('log');
 
+    async function startSystem() {
         try {
-            // Kiểm tra dung lượng file trước khi nạp
-            const response = await fetch('./ppe.onnx', { method: 'HEAD' });
-            const size = response.headers.get('content-length');
+            // Nạp file ppe.dat (đã đổi tên từ .onnx để tránh lỗi LFS)
+            log.innerText = "Đang khởi tạo phiên xử lý AI...";
             
-            if (size < 1000) {
-                throw new Error("File quá nhỏ (" + size + " bytes). Có thể GitHub LFS chưa đẩy file thật lên.");
-            }
-
-            status.innerText = "Đang nạp mô hình AI (" + (size / (1024*1024)).toFixed(1) + " MB)...";
-            
-            // Nạp mô hình
-            const session = await ort.InferenceSession.create('./ppe.onnx', { 
-                executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all'
+            const session = await ort.InferenceSession.create('./ppe.dat', { 
+                executionProviders: ['wasm'] 
             });
             
-            status.innerText = "● HỆ THỐNG SẴN SÀNG";
-            status.style.color = "#4ade80";
+            sttText.innerText = "HỆ THỐNG ĐANG HOẠT ĐỘNG";
+            sttText.style.color = "#4ade80";
+            log.innerText = "Mô hình ppe.dat đã nạp thành công.";
 
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" } 
+            });
             document.getElementById('webcam').srcObject = stream;
-
         } catch (e) {
-            status.innerText = "Lỗi hệ thống (V1.13)";
-            errorBox.style.display = "block";
-            errorBox.innerText = e.message + "\n\nGợi ý: Hãy kiểm tra xem file ppe.onnx trên GitHub có đúng 87MB không.";
+            sttText.innerText = "LỖI HỆ THỐNG";
+            sttText.style.color = "#ef4444";
+            log.innerHTML = "Lỗi: " + e.message + "<br>Gợi ý: Kiểm tra file ppe.dat trên GitHub.";
         }
     }
-    init();
+    startSystem();
 </script>
 </body>
 </html>

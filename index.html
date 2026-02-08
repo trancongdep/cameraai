@@ -3,80 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VDC Safety AI v1.18</title>
+    <title>VDC Safety AI v1.19</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <script async src="https://docs.opencv.org/4.5.4/opencv.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #020617; color: white; overflow: hidden; }
-        .header { background: #1d4ed8; padding: 10px; text-align: center; font-weight: bold; font-size: 14px; }
-        #wrapper { position: relative; width: 100vw; height: 70vh; background: #000; }
-        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
-        .footer { background: #1e293b; padding: 15px; height: 30vh; border-top: 2px solid #3b82f6; }
-        .alert-box { color: #ef4444; font-weight: bold; border: 1px solid #ef4444; padding: 5px; margin-top: 5px; display: none; animation: blink 0.5s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+        body { font-family: sans-serif; margin: 0; background: #000; color: white; overflow: hidden; }
+        .header { background: #1d4ed8; padding: 10px; text-align: center; font-size: 14px; font-weight: bold; position: fixed; width: 100%; top: 0; z-index: 10; }
+        #container { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; width: 100%; height: 100%; top: 0; left: 0; }
+        .footer { position: fixed; bottom: 0; width: 100%; background: rgba(30, 41, 59, 0.9); padding: 15px; border-top: 1px solid #3b82f6; }
+        .alert-active { color: #ff4444; font-weight: bold; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div class="header">VDC SAFETY AI - GIÁM SÁT PPE v1.18</div>
+<div class="header">VDC SAFETY AI - GIÁM SÁT PPE v1.19</div>
 
-<div id="wrapper">
+<div id="container">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
 </div>
 
 <div class="footer">
-    <div id="stt" style="color: #4ade80;">● ĐANG QUÉT...</div>
-    <div id="result" style="font-size: 18px; margin-top: 10px;">Chờ nhận diện đối tượng...</div>
-    <div id="alarm-ui" class="alert-box">CẢNH BÁO: VI PHẠM AN TOÀN!</div>
+    <div id="stt" style="color: #4ade80;">● ĐANG KẾT NỐI CAMERA...</div>
+    <div id="result" style="font-size: 16px; margin-top: 5px;">Hệ thống đang sẵn sàng quét vi phạm.</div>
     <audio id="beep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 </div>
 
 <script>
-    // Nhãn từ file ppe.pt của bạn
     const labels = ["Đã đội nón", "Khẩu trang", "CHƯA ĐỘI NÓN", "Không khẩu trang", "Không áo phản quang", "Nhân viên", "Cọc tiêu", "Áo phản quang", "Máy móc", "Phương tiện"];
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
-    const alarmUI = document.getElementById('alarm-ui');
+    const stt = document.getElementById('stt');
+    const res = document.getElementById('result');
     const beep = document.getElementById('beep');
     let session;
 
-    async function init() {
+    async function startApp() {
         try {
+            // Nạp mô hình ppe.dat (83.3MB)
             session = await ort.InferenceSession.create('./ppe.dat', { executionProviders: ['wasm'] });
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            
+            // Yêu cầu quyền Camera
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", width: 640, height: 640 } 
+            });
             video.srcObject = stream;
+
             video.onloadedmetadata = () => {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                runDetection();
+                stt.innerText = "● HỆ THỐNG ĐANG QUÉT";
+                detectFrame();
             };
-        } catch (e) { alert("Lỗi khởi động: " + e.message); }
-    }
-
-    async function runDetection() {
-        // Vẽ khung hình từ Video lên Canvas để AI xử lý
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // --- LOGIC NHẬN DIỆN SẼ ĐƯỢC XỬ LÝ TẠI ĐÂY ---
-        // Do mô hình ONNX cần xử lý Tensor, tạm thời tôi hiển thị giả lập logic báo động
-        
-        // Ví dụ: Giả sử phát hiện nhãn số 2 (CHƯA ĐỘI NÓN)
-        // checkViolation(labels[2]); 
-
-        requestAnimationFrame(runDetection);
-    }
-
-    function checkViolation(foundLabel) {
-        if (foundLabel.includes("CHƯA") || foundLabel.includes("Không")) {
-            alarmUI.style.display = "block";
-            beep.play();
-        } else {
-            alarmUI.style.display = "none";
+        } catch (e) {
+            stt.innerText = "Lỗi: " + e.message;
+            stt.style.color = "#ff4444";
         }
     }
 
-    init();
+    async function detectFrame() {
+        // 1. Vẽ hình video lên canvas để lấy dữ liệu pixel
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // 2. Logic Inference (Giả lập để bạn test camera trước)
+        // Khi OpenCV load xong, chúng ta sẽ đưa Tensor vào đây ở v1.20
+        
+        requestAnimationFrame(detectFrame);
+    }
+
+    // Khởi chạy khi trang web sẵn sàng
+    window.onload = startApp;
 </script>
 </body>
 </html>

@@ -3,132 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VDC Safety AI v1.24</title>
+    <link rel="manifest" href="./manifest.json">
+    <title>VDC Safety AI v1.26</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
         :root { --blue: #2563eb; --red: #dc2626; --slate: #0f172a; }
-        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--slate); color: white; height: 100vh; display: flex; flex-direction: column; }
-        
-        /* Màn hình nạp mô hình */
-        #loader { position: fixed; inset: 0; background: var(--slate); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        body { font-family: sans-serif; margin: 0; background: var(--slate); color: white; height: 100vh; display: flex; flex-direction: column; }
+        #loader { position: fixed; inset: 0; background: var(--slate); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .spin { width: 40px; height: 40px; border: 4px solid #1e293b; border-top-color: var(--blue); border-radius: 50%; animation: s 1s linear infinite; }
         @keyframes s { to { transform: rotate(360deg); } }
-
-        /* Giao diện chính */
-        header { padding: 15px; background: #1e293b; text-align: center; font-weight: bold; font-size: 14px; border-bottom: 1px solid #334155; }
-        #view { flex: 1; position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-        video, #preview { width: 100%; height: 100%; object-fit: cover; }
-        #preview { display: none; position: absolute; top: 0; left: 0; z-index: 10; }
-
-        .controls { padding: 30px; background: #1e293b; display: flex; flex-direction: column; align-items: center; gap: 15px; }
-        .shutter { width: 75px; height: 75px; border-radius: 50%; border: 5px solid white; background: var(--red); cursor: pointer; display: block; }
-        .shutter:disabled { opacity: 0.3; filter: grayscale(1); }
         
-        #stt { font-size: 15px; font-weight: 500; height: 20px; }
-        .warn { color: #ff4444; animation: blink 0.5s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        header { padding: 15px; background: #1e293b; text-align: center; font-weight: bold; border-bottom: 1px solid #334155; }
+        #view-area { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+        video, #photo-out { width: 100%; height: 100%; object-fit: contain; }
+        #photo-out { display: none; position: absolute; z-index: 10; border: 2px solid var(--blue); }
+
+        .controls { padding: 25px; background: #1e293b; border-top: 1px solid #334155; display: flex; flex-direction: column; align-items: center; }
+        .shutter-btn { width: 70px; height: 70px; border-radius: 50%; border: 5px solid white; background: var(--red); cursor: pointer; }
+        .shutter-btn:disabled { background: #475569; border-color: #334155; }
+        
+        #status { margin-top: 10px; font-size: 14px; min-height: 20px; }
+        .progress-bar { width: 80%; height: 4px; background: #334155; margin-top: 10px; display: none; border-radius: 2px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--blue); width: 0%; transition: width 0.3s; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div class="spin"></div>
-    <p id="load-msg" style="margin-top: 20px;">Đang chuẩn bị AI...</p>
+    <p style="margin-top: 20px;">Khởi động AI HSE...</p>
 </div>
 
-<header>VDC SAFETY AI - v1.24</header>
+<header>VDC SAFETY AI - v1.26</header>
 
-<div id="view">
+<div id="view-area">
     <video id="webcam" autoplay playsinline muted></video>
-    <canvas id="preview"></canvas>
-    <canvas id="hidden-canvas" width="640" height="640" style="display:none;"></canvas>
+    <canvas id="photo-out"></canvas>
+    <canvas id="proc-canvas" width="640" height="640" style="display:none;"></canvas>
 </div>
 
 <div class="controls">
-    <div id="stt">Mô hình đã lưu vào máy</div>
-    <button id="btn" class="shutter"></button>
+    <div id="status">Sẵn sàng</div>
+    <div class="progress-bar" id="p-bar"><div class="progress-fill" id="p-fill"></div></div>
+    <button id="cap-btn" class="shutter-btn"></button>
     <audio id="beep" src="https://www.soundjay.com/buttons/beep-01a.mp3"></audio>
 </div>
 
 <script>
-    const labels = ["Đã đội nón", "Khẩu trang", "CHƯA ĐỘI NÓN", "Không khẩu trang", "Không áo phản quang", "Nhân viên", "Cọc tiêu", "Áo phản quang", "Máy móc", "Phương tiện"];
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+
     const video = document.getElementById('webcam');
-    const preview = document.getElementById('preview');
-    const hCanvas = document.getElementById('hidden-canvas');
-    const btn = document.getElementById('btn');
-    const stt = document.getElementById('stt');
+    const photoOut = document.getElementById('photo-out');
+    const procCanvas = document.getElementById('proc-canvas');
+    const btn = document.getElementById('cap-btn');
+    const stt = document.getElementById('status');
+    const pBar = document.getElementById('p-bar');
+    const pFill = document.getElementById('p-fill');
     const loader = document.getElementById('loader');
     const beep = document.getElementById('beep');
     let session;
 
-    async function initPWA() {
+    async function start() {
         try {
-            // Cơ chế lưu mô hình vào Cache để tải 1 lần duy nhất
-            const cache = await caches.open('vdc-ai-cache');
-            let response = await cache.match('./ppe.dat');
-            
-            if (!response) {
-                document.getElementById('load-msg').innerText = "Tải mô hình lần đầu (83MB)...";
-                await cache.add('./ppe.dat');
-                response = await cache.match('./ppe.dat');
-            }
-
-            const modelData = await response.arrayBuffer();
-            session = await ort.InferenceSession.create(modelData, { executionProviders: ['wasm'] });
-            
+            // Tối ưu nạp mô hình bằng cách giới hạn luồng xử lý (threads)
+            session = await ort.InferenceSession.create('./ppe.dat', { 
+                executionProviders: ['wasm'],
+                graphOptimizationLevel: 'all',
+                executionMode: 'parallel'
+            });
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
             video.srcObject = stream;
-            
             loader.style.display = 'none';
-        } catch (e) { alert("Lỗi nạp PWA: " + e.message); }
+        } catch (e) { alert("Lỗi: " + e.message); }
     }
 
     btn.onclick = async () => {
         btn.disabled = true;
-        stt.innerText = "ĐANG PHÂN TÍCH...";
-        
-        // Chụp ảnh
-        const hCtx = hCanvas.getContext('2d');
-        hCtx.drawImage(video, 0, 0, 640, 640);
-        
-        // Hiện ảnh tĩnh
-        const pCtx = preview.getContext('2d');
-        preview.width = video.videoWidth; preview.height = video.videoHeight;
-        pCtx.drawImage(video, 0, 0, preview.width, preview.height);
-        preview.style.display = 'block';
+        pBar.style.display = 'block';
+        pFill.style.width = '20%';
+        stt.innerText = "Đang chụp ảnh...";
 
-        // Xử lý AI
-        const img = hCtx.getImageData(0, 0, 640, 640);
-        const input = new Float32Array(3 * 640 * 640);
-        for (let i = 0; i < 640 * 640; i++) {
-            input[i] = img.data[i*4]/255.0;
-            input[i+640*640] = img.data[i*4+1]/255.0;
-            input[i+2*640*640] = img.data[i*4+2]/255.0;
-        }
+        const pCtx = photoOut.getContext('2d');
+        photoOut.width = video.videoWidth; photoOut.height = video.videoHeight;
+        pCtx.drawImage(video, 0, 0, photoOut.width, photoOut.height);
+        photoOut.style.display = 'block';
 
-        const out = await session.run({ images: new ort.Tensor('float32', input, [1,3,640,640]) });
-        const res = out[Object.keys(out)[0]].data;
+        const prCtx = procCanvas.getContext('2d');
+        prCtx.drawImage(video, 0, 0, 640, 640);
 
-        let detected = 0;
-        for (let i = 0; i < res.length; i += 6) {
-            if (res[i+4] > 0.45 && res[i+5] === 2) detected++;
-        }
+        // Giải phóng luồng giao diện 100ms trước khi tính toán nặng
+        setTimeout(async () => {
+            stt.innerText = "AI đang phân tích dữ liệu...";
+            pFill.style.width = '60%';
+            
+            const img = prCtx.getImageData(0, 0, 640, 640);
+            const input = new Float32Array(3 * 640 * 640);
+            for (let i = 0; i < 640 * 640; i++) {
+                input[i] = img.data[i*4]/255.0;
+                input[i+640*640] = img.data[i*4+1]/255.0;
+                input[i+2*640*640] = img.data[i*4+2]/255.0;
+            }
 
-        if (detected > 0) {
-            stt.innerHTML = `<span class="warn">CẢNH BÁO: ${detected} NGƯỜI CHƯA ĐỘI NÓN!</span>`;
-            beep.play();
-        } else {
-            stt.innerText = "AN TOÀN - ĐÃ ĐỘI NÓN";
-        }
+            const res = await session.run({ images: new ort.Tensor('float32', input, [1,3,640,640]) });
+            const data = res[Object.keys(res)[0]].data;
 
-        setTimeout(() => {
-            preview.style.display = 'none';
-            stt.innerText = "Sẵn sàng kiểm tra";
-            btn.disabled = false;
-        }, 4000);
+            let found = 0;
+            for (let i = 0; i < data.length; i += 6) {
+                if (data[i+4] > 0.45 && data[i+5] === 2) found++;
+            }
+
+            pFill.style.width = '100%';
+            if (found > 0) {
+                stt.innerHTML = `<b style="color:#ff4444">PHÁT HIỆN ${found} LỖI VI PHẠM!</b>`;
+                beep.play();
+            } else {
+                stt.innerHTML = "<b style='color:#22c55e'>AN TOÀN</b>";
+            }
+
+            setTimeout(() => {
+                photoOut.style.display = 'none';
+                pBar.style.display = 'none';
+                pFill.style.width = '0%';
+                stt.innerText = "Sẵn sàng";
+                btn.disabled = false;
+            }, 3000);
+        }, 100);
     };
 
-    initPWA();
+    start();
 </script>
 </body>
 </html>

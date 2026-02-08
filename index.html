@@ -4,47 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="./manifest.json">
-    <title>VDC Safety AI v1.26</title>
+    <title>VDC Safety AI v1.27</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
         :root { --blue: #2563eb; --red: #dc2626; --slate: #0f172a; }
-        body { font-family: sans-serif; margin: 0; background: var(--slate); color: white; height: 100vh; display: flex; flex-direction: column; }
+        body { font-family: sans-serif; margin: 0; background: var(--slate); color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         #loader { position: fixed; inset: 0; background: var(--slate); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .spin { width: 40px; height: 40px; border: 4px solid #1e293b; border-top-color: var(--blue); border-radius: 50%; animation: s 1s linear infinite; }
+        .spin { width: 35px; height: 35px; border: 4px solid #1e293b; border-top-color: var(--blue); border-radius: 50%; animation: s 1s linear infinite; }
         @keyframes s { to { transform: rotate(360deg); } }
-        
-        header { padding: 15px; background: #1e293b; text-align: center; font-weight: bold; border-bottom: 1px solid #334155; }
+        header { padding: 12px; background: #1e293b; text-align: center; font-weight: bold; border-bottom: 1px solid #334155; font-size: 14px; }
         #view-area { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
         video, #photo-out { width: 100%; height: 100%; object-fit: contain; }
         #photo-out { display: none; position: absolute; z-index: 10; border: 2px solid var(--blue); }
-
-        .controls { padding: 25px; background: #1e293b; border-top: 1px solid #334155; display: flex; flex-direction: column; align-items: center; }
-        .shutter-btn { width: 70px; height: 70px; border-radius: 50%; border: 5px solid white; background: var(--red); cursor: pointer; }
+        .controls { padding: 20px; background: #1e293b; border-top: 1px solid #334155; display: flex; flex-direction: column; align-items: center; }
+        .shutter-btn { width: 70px; height: 70px; border-radius: 50%; border: 5px solid white; background: var(--red); cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .shutter-btn:active { transform: scale(0.9); }
         .shutter-btn:disabled { background: #475569; border-color: #334155; }
-        
-        #status { margin-top: 10px; font-size: 14px; min-height: 20px; }
-        .progress-bar { width: 80%; height: 4px; background: #334155; margin-top: 10px; display: none; border-radius: 2px; overflow: hidden; }
-        .progress-fill { height: 100%; background: var(--blue); width: 0%; transition: width 0.3s; }
+        #status { margin-top: 10px; font-size: 14px; font-weight: bold; height: 20px; }
     </style>
 </head>
 <body>
 
 <div id="loader">
     <div class="spin"></div>
-    <p style="margin-top: 20px;">Khởi động AI HSE...</p>
+    <p style="margin-top: 15px;">Đang nạp AI tốc độ cao...</p>
 </div>
 
-<header>VDC SAFETY AI - v1.26</header>
+<header>VDC SAFETY AI - v1.27</header>
 
 <div id="view-area">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="photo-out"></canvas>
-    <canvas id="proc-canvas" width="640" height="640" style="display:none;"></canvas>
+    <canvas id="proc-canvas" width="320" height="320" style="display:none;"></canvas>
 </div>
 
 <div class="controls">
     <div id="status">Sẵn sàng</div>
-    <div class="progress-bar" id="p-bar"><div class="progress-fill" id="p-fill"></div></div>
     <button id="cap-btn" class="shutter-btn"></button>
     <audio id="beep" src="https://www.soundjay.com/buttons/beep-01a.mp3"></audio>
 </div>
@@ -57,21 +52,19 @@
     const procCanvas = document.getElementById('proc-canvas');
     const btn = document.getElementById('cap-btn');
     const stt = document.getElementById('status');
-    const pBar = document.getElementById('p-bar');
-    const pFill = document.getElementById('p-fill');
     const loader = document.getElementById('loader');
     const beep = document.getElementById('beep');
     let session;
 
     async function start() {
         try {
-            // Tối ưu nạp mô hình bằng cách giới hạn luồng xử lý (threads)
             session = await ort.InferenceSession.create('./ppe.dat', { 
                 executionProviders: ['wasm'],
-                graphOptimizationLevel: 'all',
-                executionMode: 'parallel'
+                graphOptimizationLevel: 'all'
             });
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+            });
             video.srcObject = stream;
             loader.style.display = 'none';
         } catch (e) { alert("Lỗi: " + e.message); }
@@ -79,55 +72,55 @@
 
     btn.onclick = async () => {
         btn.disabled = true;
-        pBar.style.display = 'block';
-        pFill.style.width = '20%';
-        stt.innerText = "Đang chụp ảnh...";
+        stt.innerText = "ĐANG QUÉT NHANH...";
 
+        // Chụp ảnh hiển thị (Giữ nguyên độ phân giải màn hình)
         const pCtx = photoOut.getContext('2d');
         photoOut.width = video.videoWidth; photoOut.height = video.videoHeight;
         pCtx.drawImage(video, 0, 0, photoOut.width, photoOut.height);
         photoOut.style.display = 'block';
 
+        // Chụp ảnh xử lý (Thu nhỏ về 320x320 để AI chạy nhanh)
         const prCtx = procCanvas.getContext('2d');
-        prCtx.drawImage(video, 0, 0, 640, 640);
+        prCtx.drawImage(video, 0, 0, 320, 320);
 
-        // Giải phóng luồng giao diện 100ms trước khi tính toán nặng
-        setTimeout(async () => {
-            stt.innerText = "AI đang phân tích dữ liệu...";
-            pFill.style.width = '60%';
-            
-            const img = prCtx.getImageData(0, 0, 640, 640);
-            const input = new Float32Array(3 * 640 * 640);
-            for (let i = 0; i < 640 * 640; i++) {
+        // Đợi 1 nhịp để UI không bị khựng
+        await new Promise(r => setTimeout(r, 50));
+
+        try {
+            const img = prCtx.getImageData(0, 0, 320, 320);
+            const input = new Float32Array(3 * 320 * 320);
+            // Tối ưu vòng lặp chuẩn hóa dữ liệu
+            for (let i = 0; i < 320 * 320; i++) {
                 input[i] = img.data[i*4]/255.0;
-                input[i+640*640] = img.data[i*4+1]/255.0;
-                input[i+2*640*640] = img.data[i*4+2]/255.0;
+                input[i+102400] = img.data[i*4+1]/255.0; // 320*320 = 102400
+                input[i+204800] = img.data[i*4+2]/255.0;
             }
 
-            const res = await session.run({ images: new ort.Tensor('float32', input, [1,3,640,640]) });
+            const res = await session.run({ images: new ort.Tensor('float32', input, [1,3,320,320]) });
             const data = res[Object.keys(res)[0]].data;
 
             let found = 0;
             for (let i = 0; i < data.length; i += 6) {
-                if (data[i+4] > 0.45 && data[i+5] === 2) found++;
+                if (data[i+4] > 0.4 && data[i+5] === 2) found++;
             }
 
-            pFill.style.width = '100%';
             if (found > 0) {
-                stt.innerHTML = `<b style="color:#ff4444">PHÁT HIỆN ${found} LỖI VI PHẠM!</b>`;
+                stt.innerHTML = `<span style="color:var(--red)">PHÁT HIỆN ${found} VI PHẠM!</span>`;
                 beep.play();
             } else {
-                stt.innerHTML = "<b style='color:#22c55e'>AN TOÀN</b>";
+                stt.innerHTML = "<span style='color:#22c55e'>AN TOÀN</span>";
             }
+        } catch (err) {
+            stt.innerText = "Lỗi phân tích";
+            console.error(err);
+        }
 
-            setTimeout(() => {
-                photoOut.style.display = 'none';
-                pBar.style.display = 'none';
-                pFill.style.width = '0%';
-                stt.innerText = "Sẵn sàng";
-                btn.disabled = false;
-            }, 3000);
-        }, 100);
+        setTimeout(() => {
+            photoOut.style.display = 'none';
+            stt.innerText = "Sẵn sàng";
+            btn.disabled = false;
+        }, 3000);
     };
 
     start();

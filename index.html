@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="manifest" href="./manifest.json">
-    <title>VDC Safety AI v1.30</title>
+    <title>VDC Safety AI v1.31</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
         :root { --blue: #2563eb; --red: #dc2626; --slate: #0f172a; --green: #22c55e; }
@@ -12,37 +12,27 @@
         #loader { position: fixed; inset: 0; background: var(--slate); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .spin { width: 35px; height: 35px; border: 4px solid #1e293b; border-top-color: var(--blue); border-radius: 50%; animation: s 1s linear infinite; }
         @keyframes s { to { transform: rotate(360deg); } }
-        
-        header { padding: 10px; background: #1e293b; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+        header { padding: 12px; background: #1e293b; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
         #view-area { position: relative; flex: 1; background: #000; overflow: hidden; }
         video, #photo-out { width: 100%; height: 100%; object-fit: contain; position: absolute; }
         #photo-out { display: none; z-index: 10; }
-
-        .controls { position: absolute; bottom: 0; width: 100%; padding: 20px 0; background: linear-gradient(transparent, rgba(15, 23, 42, 0.95)); display: flex; flex-direction: column; align-items: center; z-index: 20; }
-        .shutter-btn { width: 70px; height: 70px; border-radius: 50%; border: 5px solid white; background: var(--red); cursor: pointer; }
-        
-        /* Save Modal */
-        #save-panel { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; background: #1e293b; padding: 20px; border-radius: 12px; z-index: 100; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        #save-panel input { width: 100%; padding: 10px; margin: 15px 0; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box; }
-        .btn-group { display: flex; gap: 10px; width: 100%; }
-        .btn { flex: 1; padding: 12px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-save { background: var(--blue); color: white; }
-        .btn-cancel { background: #475569; color: white; }
-
-        /* History View */
+        .controls { position: absolute; bottom: 0; width: 100%; padding: 25px 0 45px 0; background: linear-gradient(transparent, rgba(15, 23, 42, 0.95)); display: flex; flex-direction: column; align-items: center; z-index: 20; }
+        .shutter-btn { width: 75px; height: 75px; border-radius: 50%; border: 5px solid white; background: var(--red); cursor: pointer; }
+        #save-panel { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; background: #1e293b; padding: 20px; border-radius: 12px; z-index: 100; box-shadow: 0 10px 30px #000; }
+        #save-panel input { width: 100%; padding: 12px; margin: 15px 0; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: white; box-sizing: border-box; }
         #history-panel { display: none; position: fixed; inset: 0; background: var(--slate); z-index: 1001; overflow-y: auto; padding: 20px; }
-        .hist-item { background: #1e293b; margin-bottom: 15px; border-radius: 8px; overflow: hidden; }
-        .hist-item img { width: 100%; display: block; }
-        .hist-info { padding: 10px; font-size: 13px; }
+        .hist-item { background: #1e293b; margin-bottom: 15px; border-radius: 8px; overflow: hidden; border: 1px solid #334155; }
+        .hist-item img { width: 100%; height: auto; }
+        .btn { padding: 12px; border-radius: 6px; border: none; font-weight: bold; flex: 1; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="loader"><div class="spin"></div><p>Đang chuẩn bị AI...</p></div>
+<div id="loader"><div class="spin"></div><p>Đang nạp AI HSE...</p></div>
 
 <header>
-    <span>VDC AI v1.30</span>
-    <button onclick="showHistory()" style="background:none; border:1px solid #fff; color:#fff; padding:4px 8px; border-radius:4px;">Lịch sử</button>
+    <span>VDC AI v1.31</span>
+    <button onclick="showHistory()" style="background:var(--blue); border:none; color:#fff; padding:6px 12px; border-radius:4px;">LỊCH SỬ</button>
 </header>
 
 <div id="view-area">
@@ -52,24 +42,23 @@
 </div>
 
 <div class="controls">
-    <div id="status" style="margin-bottom:10px; font-weight:bold;">Sẵn sàng</div>
+    <div id="status" style="margin-bottom:15px; font-weight:bold; text-shadow: 1px 1px 2px #000;">SẴN SÀNG QUÉT</div>
     <button id="cap-btn" class="shutter-btn"></button>
 </div>
 
 <div id="save-panel">
-    <h3>Lưu Vi Phạm</h3>
-    <p style="font-size:12px; color:#94a3b8;">Hệ thống phát hiện lỗi an toàn. Nhập ghi chú:</p>
+    <h3 style="margin-top:0">PHÁT HIỆN VI PHẠM</h3>
     <input type="text" id="note-input" value="Không đội nón bảo hộ">
-    <div class="btn-group">
-        <button class="btn btn-cancel" onclick="closeSave()">Hủy</button>
-        <button class="btn btn-save" onclick="confirmSave()">Lưu lại</button>
+    <div style="display:flex; gap:10px;">
+        <button class="btn" style="background:#475569; color:white;" onclick="closeSave()">HỦY</button>
+        <button class="btn" style="background:var(--blue); color:white;" onclick="confirmSave()">LƯU VI PHẠM</button>
     </div>
 </div>
 
 <div id="history-panel">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <h2>Lịch sử vi phạm</h2>
-        <button onclick="closeHistory()" style="padding:8px; border-radius:4px; background:var(--red); color:white; border:none;">Đóng</button>
+    <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
+        <h2>Dữ liệu đã lưu</h2>
+        <button onclick="closeHistory()" style="background:var(--red); color:white; border:none; padding:10px; border-radius:6px;">ĐÓNG</button>
     </div>
     <div id="history-list"></div>
 </div>
@@ -83,9 +72,8 @@
     const btn = document.getElementById('cap-btn');
     const stt = document.getElementById('status');
     const savePanel = document.getElementById('save-panel');
-    const noteInput = document.getElementById('note-input');
     const loader = document.getElementById('loader');
-    let session, lastCapturedImg = null;
+    let session, lastImg = null;
 
     async function init() {
         try {
@@ -101,7 +89,8 @@
         stt.innerText = "ĐANG PHÂN TÍCH...";
         
         const ctx = photoOut.getContext('2d');
-        photoOut.width = video.videoWidth; photoOut.height = video.videoHeight;
+        photoOut.width = video.videoWidth; 
+        photoOut.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
         photoOut.style.display = 'block';
 
@@ -111,78 +100,61 @@
         setTimeout(async () => {
             const img = prCtx.getImageData(0, 0, 320, 320);
             const input = new Float32Array(3 * 320 * 320);
+            // Chuẩn hóa và sắp xếp lại Tensor RGB
             for (let i = 0; i < 320 * 320; i++) {
-                input[i] = img.data[i*4]/255.0;
-                input[i+102400] = img.data[i*4+1]/255.0;
-                input[i+204800] = img.data[i*4+2]/255.0;
+                input[i] = img.data[i*4] / 255.0; // R
+                input[i+102400] = img.data[i*4+1] / 255.0; // G
+                input[i+204800] = img.data[i*4+2] / 255.0; // B
             }
 
             const res = await session.run({ images: new ort.Tensor('float32', input, [1,3,320,320]) });
             const data = res[Object.keys(res)[0]].data;
 
-            let violations = [];
+            let boxes = [];
             for (let i = 0; i < data.length; i += 6) {
                 const conf = data[i+4];
                 const cls = Math.round(data[i+5]);
-                // Class ID 2: Chưa đội nón
-                if (conf > 0.35 && cls === 2) {
-                    violations.push([data[i], data[i+1], data[i+2], data[i+3]]);
+                // Hạ ngưỡng xuống 0.25 để bắt lỗi nhạy hơn
+                if (conf > 0.25 && (cls === 2 || cls === 3 || cls === 4)) {
+                    boxes.push({ box: [data[i], data[i+1], data[i+2], data[i+3]], label: cls });
                 }
             }
 
-            if (violations.length > 0) {
-                stt.innerHTML = `<span style="color:#ff4444">PHÁT HIỆN ${violations.length} VI PHẠM!</span>`;
-                // Vẽ khung đỏ
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 4;
-                violations.forEach(box => {
-                    const x = (box[0] / 320) * photoOut.width;
-                    const y = (box[1] / 320) * photoOut.height;
-                    const w = (box[2] / 320) * photoOut.width - x;
-                    const h = (box[3] / 320) * photoOut.height - y;
+            if (boxes.length > 0) {
+                stt.innerHTML = `<span style="color:var(--red)">PHÁT HIỆN ${boxes.length} LỖI!</span>`;
+                ctx.strokeStyle = "red"; ctx.lineWidth = 5;
+                boxes.forEach(item => {
+                    const b = item.box;
+                    const x = (b[0] / 320) * photoOut.width;
+                    const y = (b[1] / 320) * photoOut.height;
+                    const w = (b[2] / 320) * photoOut.width - x;
+                    const h = (b[3] / 320) * photoOut.height - y;
                     ctx.strokeRect(x, y, w, h);
                 });
-                lastCapturedImg = photoOut.toDataURL("image/jpeg", 0.7);
+                lastImg = photoOut.toDataURL("image/jpeg", 0.6);
                 savePanel.style.display = 'block';
             } else {
-                stt.innerHTML = "<span style='color:#22c55e'>AN TOÀN</span>";
-                setTimeout(() => { photoOut.style.display = 'none'; btn.disabled = false; stt.innerText = "Sẵn sàng"; }, 2000);
+                stt.innerHTML = "<span style='color:var(--green)'>AN TOÀN</span>";
+                setTimeout(() => { photoOut.style.display = 'none'; btn.disabled = false; stt.innerText = "SẴN SÀNG QUÉT"; }, 1500);
             }
-        }, 100);
+        }, 50);
     };
 
-    function closeSave() {
-        savePanel.style.display = 'none';
-        photoOut.style.display = 'none';
-        btn.disabled = false;
-        stt.innerText = "Sẵn sàng";
-    }
+    function closeSave() { savePanel.style.display = 'none'; photoOut.style.display = 'none'; btn.disabled = false; stt.innerText = "SẴN SÀNG QUÉT"; }
 
     function confirmSave() {
-        const history = JSON.parse(localStorage.getItem('vdc_history') || '[]');
-        history.unshift({
-            img: lastCapturedImg,
-            note: noteInput.value,
-            time: new Date().toLocaleString()
-        });
-        localStorage.setItem('vdc_history', JSON.stringify(history.slice(0, 50))); // Lưu tối đa 50 mục
-        alert("Đã lưu vi phạm thành công!");
+        const hist = JSON.parse(localStorage.getItem('vdc_v2') || '[]');
+        hist.unshift({ img: lastImg, note: document.getElementById('note-input').value, date: new Date().toLocaleString() });
+        localStorage.setItem('vdc_v2', JSON.stringify(hist.slice(0, 30)));
         closeSave();
     }
 
     function showHistory() {
         const list = document.getElementById('history-list');
-        const history = JSON.parse(localStorage.getItem('vdc_history') || '[]');
-        list.innerHTML = history.length ? '' : '<p>Chưa có dữ liệu lưu trữ.</p>';
-        history.forEach(item => {
-            list.innerHTML += `
-                <div class="hist-item">
-                    <img src="${item.img}">
-                    <div class="hist-info">
-                        <b>${item.time}</b><br>
-                        <span>Ghi chú: ${item.note}</span>
-                    </div>
-                </div>`;
+        const hist = JSON.parse(localStorage.getItem('vdc_v2') || '[]');
+        list.innerHTML = hist.length ? '' : '<p>Chưa có dữ liệu.</p>';
+        hist.forEach(item => {
+            list.innerHTML += `<div class="hist-item"><img src="${item.img}"><div style="padding:10px"><b>${item.date}</b><br>${item.note}</div></div>`;
         });
         document.getElementById('history-panel').style.display = 'block';
     }

@@ -2,66 +2,81 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VDC Safety AI v1.16</title>
+    <title>VDC Safety AI v1.18</title>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #020617; color: white; display: flex; flex-direction: column; height: 100vh; }
-        .header { background: #1d4ed8; padding: 15px; text-align: center; font-weight: bold; border-bottom: 3px solid #3b82f6; }
-        #view-container { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
-        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: cover; }
-        .status-footer { background: #1e293b; padding: 20px; border-top: 1px solid #334155; }
-        .version-badge { background: #334155; padding: 2px 8px; border-radius: 5px; font-size: 10px; color: #94a3b8; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #020617; color: white; overflow: hidden; }
+        .header { background: #1d4ed8; padding: 10px; text-align: center; font-weight: bold; font-size: 14px; }
+        #wrapper { position: relative; width: 100vw; height: 70vh; background: #000; }
+        video, canvas { position: absolute; width: 100%; height: 100%; object-fit: contain; }
+        .footer { background: #1e293b; padding: 15px; height: 30vh; border-top: 2px solid #3b82f6; }
+        .alert-box { color: #ef4444; font-weight: bold; border: 1px solid #ef4444; padding: 5px; margin-top: 5px; display: none; animation: blink 0.5s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div class="header">
-    VDC SAFETY AI 
-    <span class="version-badge">v1.16</span>
-</div>
+<div class="header">VDC SAFETY AI - GIÁM SÁT PPE v1.18</div>
 
-<div id="view-container">
+<div id="wrapper">
     <video id="webcam" autoplay playsinline muted></video>
     <canvas id="overlay"></canvas>
 </div>
 
-<div class="status-footer">
-    <div style="font-weight: bold;">Trạng thái: <span id="stt-text" style="color: #fbbf24;">Đang khởi động...</span></div>
-    <div id="log" style="font-size: 12px; color: #94a3b8; margin-top: 5px;">
-        Đang tải ppe.dat (83.3 MB).
-    </div>
+<div class="footer">
+    <div id="stt" style="color: #4ade80;">● ĐANG QUÉT...</div>
+    <div id="result" style="font-size: 18px; margin-top: 10px;">Chờ nhận diện đối tượng...</div>
+    <div id="alarm-ui" class="alert-box">CẢNH BÁO: VI PHẠM AN TOÀN!</div>
+    <audio id="beep" src="https://www.soundjay.com/buttons/beep-01a.mp3" preload="auto"></audio>
 </div>
 
 <script>
-    const sttText = document.getElementById('stt-text');
-    const log = document.getElementById('log');
+    // Nhãn từ file ppe.pt của bạn
+    const labels = ["Đã đội nón", "Khẩu trang", "CHƯA ĐỘI NÓN", "Không khẩu trang", "Không áo phản quang", "Nhân viên", "Cọc tiêu", "Áo phản quang", "Máy móc", "Phương tiện"];
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const alarmUI = document.getElementById('alarm-ui');
+    const beep = document.getElementById('beep');
+    let session;
 
-    async function startSystem() {
+    async function init() {
         try {
-            // Nạp file ppe.dat (đã bỏ qua LFS)
-            const session = await ort.InferenceSession.create('./ppe.dat', { 
-                executionProviders: ['wasm'] 
-            });
-            
-            sttText.innerText = "HỆ THỐNG ĐANG HOẠT ĐỘNG";
-            sttText.style.color = "#4ade80";
-            log.innerText = "Mô hình ppe.dat (83.3MB) đã nạp thành công.";
+            session = await ort.InferenceSession.create('./ppe.dat', { executionProviders: ['wasm'] });
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            video.srcObject = stream;
+            video.onloadedmetadata = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                runDetection();
+            };
+        } catch (e) { alert("Lỗi khởi động: " + e.message); }
+    }
 
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" } 
-            });
-            document.getElementById('webcam').srcObject = stream;
-        } catch (e) {
-            sttText.innerText = "LỖI KẾT NỐI";
-            sttText.style.color = "#ef4444";
-            log.innerText = "Lỗi: " + e.message;
+    async function runDetection() {
+        // Vẽ khung hình từ Video lên Canvas để AI xử lý
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // --- LOGIC NHẬN DIỆN SẼ ĐƯỢC XỬ LÝ TẠI ĐÂY ---
+        // Do mô hình ONNX cần xử lý Tensor, tạm thời tôi hiển thị giả lập logic báo động
+        
+        // Ví dụ: Giả sử phát hiện nhãn số 2 (CHƯA ĐỘI NÓN)
+        // checkViolation(labels[2]); 
+
+        requestAnimationFrame(runDetection);
+    }
+
+    function checkViolation(foundLabel) {
+        if (foundLabel.includes("CHƯA") || foundLabel.includes("Không")) {
+            alarmUI.style.display = "block";
+            beep.play();
+        } else {
+            alarmUI.style.display = "none";
         }
     }
-    startSystem();
+
+    init();
 </script>
 </body>
 </html>

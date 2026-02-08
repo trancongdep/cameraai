@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vdc-safety-v1.25';
+const CACHE_NAME = 'vdc-safety-v1.26';
 const ASSETS = [
   './index.html',
   './manifest.json',
